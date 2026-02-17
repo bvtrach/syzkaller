@@ -253,24 +253,6 @@ func (ctx *context) generateSource() ([]byte, error) {
 		}
 	}
 
-
-	// numConnectSizes := 0
-
-	// connectFDsBuf := new(bytes.Buffer)
-
-
-	// connectReadSizesBuf := new(bytes.Buffer)
-	// for fdRes := range connectFDs {
-	// 	size, ok := readFDSizes[fdRes]
-	// 	if ok {
-	// 		numConnectSizes++
-	// 		fmt.Fprintf(closeBuf, "\tclose(UNIQUE_VAR(r)[%v]);\n", fdRes)
-	// 	}
-	// }
-	// connectReadBuf := new(bytes.Buffer)
-	// connectReadBuf
-
-
 	// sub directories for mkdir
 	subdirs := ctx.mapToArrayStringBool(ctx.opts.SubDirs)
 
@@ -784,14 +766,20 @@ func (ctx *context) fmtCallBody(call prog.ExecCall) string {
 			case 1:
 				switch callName {
 				case "connect":
-					argsStrs = append(argsStrs, "UNIQUE_VAR(ctx->connect_arg)")
+					argsStrs = append(argsStrs, "UNIQUE_VAR(ctx->connect4_arg)")
 					continue
-				case "bind$inet":
-					argsStrs = append(argsStrs, "UNIQUE_VAR(ctx->bind_arg)")
+				case "bind":
+					argsStrs = append(argsStrs, "UNIQUE_VAR(ctx->bind4_arg)")
 					continue
-				case "bind$unix":
-					argsStrs = append(argsStrs, "UNIQUE_VAR(ctx->tmpdir) \"/\"")
-					// do not continue, as sanitized path needs to be added as well after dirfd path
+				}
+			case 2:
+				switch callName {
+				case "connect":
+					argsStrs = append(argsStrs, "sizeof(*(UNIQUE_VAR(ctx->connect4_arg)))")
+					continue
+				case "bind":
+					argsStrs = append(argsStrs, "sizeof(*(UNIQUE_VAR(ctx->bind4_arg)))")
+					continue
 				}
 			}
 		}
