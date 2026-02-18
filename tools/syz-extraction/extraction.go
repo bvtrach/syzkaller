@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -168,34 +167,10 @@ func saveProg2File(p *prog.Prog, prefix string, index int) {
 	log.Logf(0, "Stored program %s", outName)
 }
 
-func filterProgram(p *prog.Prog) *prog.Prog {
-	syscall_blacklist := []string{
-		"futex",
-		"accept",
-		"execve",
-		"recvfrom",
-		"sendto",
-		"exit",
-		"clone",
-		"clone3",
-		"clock_nanosleep",
-	}
-
-	for i := len(p.Calls)-1; i >= 0; i-- {
-		if slices.Contains(syscall_blacklist,p.Calls[i].Meta.CallName) {
-			p.Calls = append(p.Calls[:i], p.Calls[i+1:]...)
-		}
-	}
-
-	return p
-}
-
 func main() {
 	help()
 
 	p := readProg()
-
-	p = filterProgram(p)
 
 	generateAllProgs(p)
 }
