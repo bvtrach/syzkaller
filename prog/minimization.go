@@ -248,7 +248,7 @@ func relatedCalls(p0 *Prog, callIndex0 int) map[int]bool {
 }
 
 func usedMemory(p0 *Prog, keptCalls map[int]bool) map[uint64]bool {
-	addrs := make(map[uint64]bool) 
+	addrs := make(map[uint64]bool)
 	for i, call := range p0.Calls {
 		if keptCalls[i] {
 			continue
@@ -264,7 +264,7 @@ func usedMemory(p0 *Prog, keptCalls map[int]bool) map[uint64]bool {
 	return addrs
 }
 
-func keepMemRelation(p0 *Prog, mAddrs map[uint64]bool, keptCalls map[int]bool) (map[uint64]bool,map[int]bool) {
+func keepMemRelation(p0 *Prog, mAddrs map[uint64]bool, keptCalls map[int]bool) (map[uint64]bool, map[int]bool) {
 	n := 0
 	for n < len(keptCalls) {
 		// print(mAddrs)
@@ -296,7 +296,7 @@ func keepMemRelation(p0 *Prog, mAddrs map[uint64]bool, keptCalls map[int]bool) (
 			}
 		}
 	}
-	return mAddrs,keptCalls
+	return mAddrs, keptCalls
 }
 
 func uses(call *Call) map[any]bool {

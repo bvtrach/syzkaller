@@ -24,7 +24,7 @@ var (
 	flagArch = flag.String("arch", runtime.GOARCH, "target arch")
 	flagProg = flag.String("prog", "", "file with program to convert (required)")
 
-	flagStrict = flag.Bool("strict", false, "parse input program in strict mode")
+	flagStrict      = flag.Bool("strict", false, "parse input program in strict mode")
 	flagDeserialize = flag.String("deserialize", "", "(Optional) directory to store deserialized programs")
 	flagMinCalls    = flag.Int("minCalls", 10, "minimum number of remaining syscalls after minimization")
 	flagTopCalls    = flag.Int("topCalls", 2, "number of most used usyscalls to be used for file name generation")
@@ -92,7 +92,7 @@ func generateAllProgs(p0 *prog.Prog) (pF *prog.Prog) {
 				prefixLen = 2
 				progBase := filepath.Base(*flagProg)
 				splitBase := strings.Split(progBase, "_")
-				if len(splitBase) > 1 && splitBase[0] == "thread" {
+				if len(splitBase) > 1 && (splitBase[0] == "thread" || splitBase[0] == "program") {
 					progBase = strings.Join(splitBase[1:], "_")
 					prefixLen = 1
 				}
@@ -102,7 +102,7 @@ func generateAllProgs(p0 *prog.Prog) (pF *prog.Prog) {
 				outPrefix := strings.Join(strings.Split(progBase, "_")[:prefixLen], "_") + "_" + strings.Join(topNames, "_")
 				_, ok := outPrefixesIdx[outPrefix]
 				if !ok {
-					outPrefixesIdx[outPrefix]=0
+					outPrefixesIdx[outPrefix] = 0
 				} else {
 					outPrefixesIdx[outPrefix]++
 				}

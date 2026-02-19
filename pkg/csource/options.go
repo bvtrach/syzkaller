@@ -53,11 +53,11 @@ type Options struct {
 
 	CallComments bool `json:"callcomments,omitempty"`
 
-	CSB        bool   `json:"csb"`
-	SubDirs    map[string](bool)	`json:"subdirs"`
-	FileSizes  map[uint64](uint64) `json:"filesizes"`
-	FileNames  map[uint64](string) `json:"filenames"`
-	NumNop     int    `json:"numnop"`
+	CSB       bool                `json:"csb"`
+	SubDirs   map[string](bool)   `json:"subdirs"`
+	FileSizes map[uint64](uint64) `json:"filesizes"`
+	FileNames map[uint64](string) `json:"filenames"`
+	NumNop    int                 `json:"numnop"`
 
 	LegacyOptions
 }

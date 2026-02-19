@@ -41,21 +41,21 @@ import (
 type NetOp int
 
 const (
-    NetRead NetOp = iota
-    NetWrite
+	NetRead NetOp = iota
+	NetWrite
 )
 
 type NetOpSize struct {
-	Op NetOp
+	Op   NetOp
 	Num  uint64
 	Size uint64
 }
 
 var (
-	missedFDResources 	   = make(map[uint64](bool))
-	connectFDs		 	   = make(map[uint64](bool))
-	readFDSizes	 	   	   = make(map[uint64](uint64))
-	NetOpsFDs   		   = make(map[uint64]([]NetOpSize))
+	missedFDResources = make(map[uint64](bool))
+	connectFDs        = make(map[uint64](bool))
+	readFDSizes       = make(map[uint64](uint64))
+	NetOpsFDs         = make(map[uint64]([]NetOpSize))
 )
 
 func AddToNetOps(res uint64, op NetOp, size uint64) {
@@ -85,22 +85,22 @@ func AddToNetOps(res uint64, op NetOp, size uint64) {
 	}
 
 	// Last op was also Read, combine into total
-	nosNew := NetOpSize{op, nosLast.Num+1, nosLast.Size + size}
+	nosNew := NetOpSize{op, nosLast.Num + 1, nosLast.Size + size}
 	netops[len(netops)-1] = nosNew
 	NetOpsFDs[res] = netops
 }
 
 var netOpName = map[NetOp]string{
-    NetRead:	"r",
-    NetWrite: 	"w",
+	NetRead:  "r",
+	NetWrite: "w",
 }
 
 func (no NetOp) String() string {
-    return netOpName[no]
+	return netOpName[no]
 }
 
 func (nos NetOpSize) String() string {
-    return strconv.FormatUint(nos.Num, 10) + netOpName[nos.Op] + strconv.FormatUint(nos.Size, 10)
+	return strconv.FormatUint(nos.Num, 10) + netOpName[nos.Op] + strconv.FormatUint(nos.Size, 10)
 }
 
 func NetOpsString(res uint64) string {
@@ -248,7 +248,7 @@ func (ctx *context) generateSource() ([]byte, error) {
 
 	closeBuf := new(bytes.Buffer)
 	for fdRes, open := range missedFDResources {
-		if (open) {
+		if open {
 			fmt.Fprintf(closeBuf, "\tclose(UNIQUE_VAR(r)[%v]);\n", fdRes)
 		}
 	}
@@ -271,25 +271,25 @@ func (ctx *context) generateSource() ([]byte, error) {
 		results = ""
 		syscalls = varsBuf.String() + "\n" + syscalls + "\n" + closeBuf.String()
 	}
-	
+
 	replacements := map[string]string{
-			"PROCS":           fmt.Sprint(ctx.opts.Procs),
-			"REPEAT_TIMES":    fmt.Sprint(ctx.opts.RepeatTimes),
-			"NUM_CALLS":       fmt.Sprint(len(ctx.p.Calls)),
-			"MMAP_DATA":       strings.Join(mmapCalls, ""),
-			"SYSCALL_DEFINES": ctx.generateSyscallDefines(),
-			"SANDBOX_FUNC":    sandboxFunc,
-			"RESULTS":         results,
-			"SYSCALLS":        syscalls,
-			"NUM_NOP":         fmt.Sprint(ctx.opts.NumNop),
-			"NUMSUBDIRS":      fmt.Sprint(len(ctx.opts.SubDirs)),
-			"SUBDIRS":         subdirs,
-			"NUMFILESIZES":    fmt.Sprint(len(ctx.opts.FileSizes)),
-			"FILESIZES":       filesizes,
-			"NUMFILENAMES":    fmt.Sprint(len(ctx.opts.FileNames)),
-			"FILENAMES":       filenames,
+		"PROCS":           fmt.Sprint(ctx.opts.Procs),
+		"REPEAT_TIMES":    fmt.Sprint(ctx.opts.RepeatTimes),
+		"NUM_CALLS":       fmt.Sprint(len(ctx.p.Calls)),
+		"MMAP_DATA":       strings.Join(mmapCalls, ""),
+		"SYSCALL_DEFINES": ctx.generateSyscallDefines(),
+		"SANDBOX_FUNC":    sandboxFunc,
+		"RESULTS":         results,
+		"SYSCALLS":        syscalls,
+		"NUM_NOP":         fmt.Sprint(ctx.opts.NumNop),
+		"NUMSUBDIRS":      fmt.Sprint(len(ctx.opts.SubDirs)),
+		"SUBDIRS":         subdirs,
+		"NUMFILESIZES":    fmt.Sprint(len(ctx.opts.FileSizes)),
+		"FILESIZES":       filesizes,
+		"NUMFILENAMES":    fmt.Sprint(len(ctx.opts.FileNames)),
+		"FILENAMES":       filenames,
 	}
-	
+
 	if !ctx.opts.Threaded && !ctx.opts.Repeat && ctx.opts.Sandbox == "" {
 		// This inlines syscalls right into main for the simplest case.
 		replacements["SANDBOX_FUNC"] = replacements["SYSCALLS"]
@@ -339,15 +339,15 @@ func (ctx *context) generateSource() ([]byte, error) {
 		header += "#define UNIQUE_STR_STR(str) #str\n"
 		header += "#define UNIQUE_STR() UNIQUE_STR_STR(RESOLVE(UNIQUE_ID))\n"
 		header += "#define MMAP_OFFSET " + fmt.Sprintf("0x%x", ctx.target.DataOffset) + "ul\n"
-		header += "#define MMAP_LENGTH " + fmt.Sprintf("0x%x", ctx.target.NumPages * ctx.target.PageSize) + "ul\n"
-		
+		header += "#define MMAP_LENGTH " + fmt.Sprintf("0x%x", ctx.target.NumPages*ctx.target.PageSize) + "ul\n"
+
 		numNetRes := len(NetOpsFDs)
-		
+
 		idx := 0
 		header += "const char* UNIQUE_VAR(netops)[" + fmt.Sprintf("%d", numNetRes) + "] = {"
 		for res := range NetOpsFDs {
 			if idx > 0 {
-				header += ", "		
+				header += ", "
 			}
 			header += "\"" + NetOpsString(res) + "\""
 			idx++
@@ -573,7 +573,7 @@ func (ctx *context) generateCalls(p prog.ExecProg, trace, addComments bool,
 		calls = append(calls, w.String())
 
 		// get resource indices for filedescriptor related calls
-		if(resCopyout) {
+		if resCopyout {
 			fdRes := call.Index
 			missedFDResources[fdRes] = true
 		}
@@ -587,7 +587,6 @@ func (ctx *context) generateCalls(p prog.ExecProg, trace, addComments bool,
 			fdRes := arg.(prog.ExecArgResult).Index
 			missedFDResources[fdRes] = false
 		}
-
 
 		if callName == "read" || callName == "pread" || callName == "pread64" || callName == "recv" || callName == "recvfrom" {
 			arg0 := call.Args[0]
@@ -619,7 +618,7 @@ func (ctx *context) generateCalls(p prog.ExecProg, trace, addComments bool,
 		if callName == "sendmsg" {
 			arg0 := call.Args[0]
 			fdRes := arg0.(prog.ExecArgResult).Index
-			
+
 			AddToNetOps(fdRes, NetWrite, msgSizes[ci])
 		}
 
@@ -696,7 +695,7 @@ func (ctx *context) emitCall(w *bytes.Buffer, call prog.ExecCall, ci int, haveCo
 
 func valInMMapRange(ctx *context, val uint64) bool {
 	argValOffsetRangeMin := ctx.sysTarget.DataOffset - 0x1000
-	argValOffsetRangeMax := ctx.sysTarget.DataOffset + (ctx.target.NumPages*ctx.target.PageSize) + 0x1000
+	argValOffsetRangeMax := ctx.sysTarget.DataOffset + (ctx.target.NumPages * ctx.target.PageSize) + 0x1000
 
 	if val >= argValOffsetRangeMin && val <= argValOffsetRangeMax {
 		return true
