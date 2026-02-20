@@ -14,10 +14,12 @@
 package main
 
 import (
+	"cmp"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -82,28 +84,32 @@ func genSyscallHist(p *prog.Prog) map[string]int {
 }
 
 func topKNames(hist map[string]int, k int) []string {
+	type StringCount struct {
+		name  string
+		count int
+	}
+	var namesCounts []StringCount
 	var names []string
-	var counts []int
-
-	if k > len(hist) {
-		k = len(hist)
-	}
-
-	i := 0
-	for i < k {
-		names = append(names, "")
-		counts = append(counts, 0)
-		i++
-	}
 
 	for name, count := range hist {
-		for idx, c := range counts {
-			if count > c {
-				names[idx] = name
-				counts[idx] = count
-				break
-			}
+		namesCounts = append(namesCounts, StringCount{name, count})
+	}
+
+	for len(namesCounts) < k {
+		namesCounts = append(namesCounts, StringCount{"missing", 0})
+	}
+
+	slices.SortStableFunc(namesCounts, func(a, b StringCount) int {
+		r := cmp.Compare(a.count, b.count)
+		if r == 0 {
+			return strings.Compare(a.name, b.name)
 		}
+		return r
+	})
+	slices.Reverse(namesCounts)
+
+	for _, val := range namesCounts[:k] {
+		names = append(names, val.name)
 	}
 
 	return names
