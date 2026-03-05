@@ -4,11 +4,13 @@
 package main
 
 import (
+	"cmp"
 	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -214,6 +216,12 @@ func buildThreadList(p *prog.Prog) []int64 {
 	for t := range tt {
 		tl = append(tl, t)
 	}
+
+	slices.SortStableFunc(tl, func(a, b int64) int {
+		return cmp.Compare(a, b)
+	})
+	slices.Reverse(tl)
+
 	return tl
 }
 
