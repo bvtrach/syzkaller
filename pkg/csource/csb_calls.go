@@ -58,8 +58,8 @@ func csbMessageSizes(p *prog.Prog) []uint64 {
 	return sizes
 }
 
-func (ctx *context) prepareEmitCall(w *bytes.Buffer, call *prog.ExecCall, ci int,
-	opts emitCallOpts, initCall, dataMmap, resCopyout bool) emitCallOpts {
+func (ctx *context) prepareEmitCall(call *prog.ExecCall, opts emitCallOpts,
+	initCall, dataMmap, resCopyout bool) emitCallOpts {
 	opts.initCall = initCall
 	opts.forceNonblockArg = -1
 	opts.dataMmap = dataMmap
@@ -67,10 +67,9 @@ func (ctx *context) prepareEmitCall(w *bytes.Buffer, call *prog.ExecCall, ci int
 		return opts
 	}
 	opts.closeUnusedFD = !resCopyout && returnsFD(call.Meta)
-	ctx.prepareFIONBIO(w, *call, ci, &opts)
-	ctx.prepareOpenat2(w, *call, ci)
-	ctx.prepareFcntl(call, ci, w, &opts)
-	ctx.prepareMQAttr(w, *call, ci, &opts)
+	ctx.prepareFIONBIO(*call, &opts)
+	ctx.prepareFcntl(call, &opts)
+	ctx.prepareMQAttr(*call, &opts)
 	ctx.prepareNonblockingOpen(call, &opts)
 	return opts
 }
@@ -83,7 +82,38 @@ func returnsFD(call *prog.Syscall) bool {
 
 func (ctx *context) emitPreparedCall(w *bytes.Buffer, call prog.ExecCall, ci int,
 	haveCopyout, trace bool, opts emitCallOpts) {
+	ctx.beforeEmitCall(w, call, ci, opts)
 	ctx.emitCall(w, call, ci, haveCopyout || opts.closeUnusedFD, trace, opts)
+	ctx.afterEmitCall(w, opts)
+}
+
+func (ctx *context) beforeEmitCall(w *bytes.Buffer, call prog.ExecCall, ci int, opts emitCallOpts) {
+	if !ctx.opts.CSB {
+		return
+	}
+	if opts.csbFIONBIO {
+		fmt.Fprintf(w, "\tuint32 csb_fionbio_%d = 1;\n", ci)
+	}
+	if call.Meta.CallName == "openat2" {
+		how, known := ctx.openat2How(ci)
+		if known && how[0]&ctx.target.ConstMap["O_PATH"] == 0 {
+			how[0] |= ctx.target.ConstMap["O_NONBLOCK"]
+		}
+		fmt.Fprintf(w, "\t{\n\tstruct { uint64 flags; uint64 mode; uint64 resolve; } "+
+			"csb_open_how_%[1]d = {%[2]d, %[3]d, %[4]d};\n", ci, how[0], how[1], how[2])
+	}
+	if opts.dynamicFcntlCommand {
+		command := call.Args[1].(prog.ExecArgResult)
+		fmt.Fprintf(w, "\tintptr_t csb_fcntl_cmd_%d = %s;\n", ci, ctx.resultArgToStr(command))
+	}
+	if opts.csbMQAttr {
+		fmt.Fprintf(w, "\tstruct { intptr_t flags; intptr_t maxmsg; intptr_t msgsize; intptr_t curmsgs; "+
+			"intptr_t reserved[4]; } csb_mq_attr_%[1]d = {%[2]d, 0, 0, 0};\n",
+			ci, ctx.target.ConstMap["O_NONBLOCK"])
+	}
+}
+
+func (*context) afterEmitCall(w *bytes.Buffer, opts emitCallOpts) {
 	if opts.closeUnusedFD {
 		fmt.Fprintf(w, "\tif (res > 2) close((int)res);\n")
 	}
@@ -94,7 +124,7 @@ func (ctx *context) copyoutMultiple(call prog.ExecCall, resCopyout bool, opts em
 		resCopyout && ctx.opts.CSB && ctx.target.OS == targets.Linux && opts.localIO[call.Index]
 }
 
-func (ctx *context) prepareFIONBIO(w *bytes.Buffer, call prog.ExecCall, ci int, opts *emitCallOpts) {
+func (ctx *context) prepareFIONBIO(call prog.ExecCall, opts *emitCallOpts) {
 	if call.Meta.CallName != "ioctl" || len(call.Args) <= 2 || !localIOArg(call, opts.localIO) {
 		return
 	}
@@ -102,24 +132,11 @@ func (ctx *context) prepareFIONBIO(w *bytes.Buffer, call prog.ExecCall, ci int, 
 	value, valueOK := call.Args[2].(prog.ExecArgConst)
 	if cmdOK && valueOK && cmd.Value == ctx.target.ConstMap["FIONBIO"] && valInMMapRange(ctx, value.Value) {
 		opts.csbFIONBIO = true
-		fmt.Fprintf(w, "\tuint32 csb_fionbio_%d = 1;\n", ci)
 	}
 }
 
-func (ctx *context) prepareOpenat2(w *bytes.Buffer, call prog.ExecCall, ci int) {
-	if call.Meta.CallName != "openat2" {
-		return
-	}
-	how, known := ctx.openat2How(ci)
-	if known && how[0]&ctx.target.ConstMap["O_PATH"] == 0 {
-		how[0] |= ctx.target.ConstMap["O_NONBLOCK"]
-	}
-	fmt.Fprintf(w, "\t{\n\tstruct { uint64 flags; uint64 mode; uint64 resolve; } "+
-		"csb_open_how_%[1]d = {%[2]d, %[3]d, %[4]d};\n", ci, how[0], how[1], how[2])
-}
-
-func (ctx *context) prepareFcntl(call *prog.ExecCall, ci int, w *bytes.Buffer, opts *emitCallOpts) {
-	if fcntlCommand(*call, ctx.target.ConstMap["F_SETFL"]) && localIOArg(*call, opts.localIO) {
+func (ctx *context) prepareFcntl(call *prog.ExecCall, opts *emitCallOpts) {
+	if ctx.fcntlCommand(*call, "F_SETFL") && localIOArg(*call, opts.localIO) {
 		args := append([]prog.ExecArg(nil), call.Args...)
 		if flags, ok := args[2].(prog.ExecArgConst); ok {
 			flags.Value |= ctx.target.ConstMap["O_NONBLOCK"]
@@ -132,14 +149,13 @@ func (ctx *context) prepareFcntl(call *prog.ExecCall, ci int, w *bytes.Buffer, o
 	if call.Meta.CallName != "fcntl" || len(call.Args) <= 1 || !localIOArg(*call, opts.localIO) {
 		return
 	}
-	command, dynamic := call.Args[1].(prog.ExecArgResult)
+	_, dynamic := call.Args[1].(prog.ExecArgResult)
 	if dynamic {
 		opts.dynamicFcntlCommand = true
-		fmt.Fprintf(w, "\tintptr_t csb_fcntl_cmd_%d = %s;\n", ci, ctx.resultArgToStr(command))
 	}
 }
 
-func (ctx *context) prepareMQAttr(w *bytes.Buffer, call prog.ExecCall, ci int, opts *emitCallOpts) {
+func (ctx *context) prepareMQAttr(call prog.ExecCall, opts *emitCallOpts) {
 	if call.Meta.CallName != "mq_getsetattr" || !localIOArg(call, opts.localIO) {
 		return
 	}
@@ -148,9 +164,6 @@ func (ctx *context) prepareMQAttr(w *bytes.Buffer, call prog.ExecCall, ci int, o
 		return
 	}
 	opts.csbMQAttr = true
-	fmt.Fprintf(w, "\tstruct { intptr_t flags; intptr_t maxmsg; intptr_t msgsize; intptr_t curmsgs; "+
-		"intptr_t reserved[4]; } csb_mq_attr_%[1]d = {%[2]d, 0, 0, 0};\n",
-		ci, ctx.target.ConstMap["O_NONBLOCK"])
 }
 
 func (ctx *context) prepareNonblockingOpen(call *prog.ExecCall, opts *emitCallOpts) {
@@ -212,7 +225,7 @@ func finishCSBCalls() {
 	NetOpsFDsAccept = acceptOps
 }
 
-func localIOResources(p prog.ExecProg, target *prog.Target) map[uint64]bool {
+func (ctx *context) localIOResources(p prog.ExecProg) map[uint64]bool {
 	local := make(map[uint64]bool)
 	for _, call := range p.Calls {
 		switch call.Meta.CallName {
@@ -229,8 +242,8 @@ func localIOResources(p prog.ExecProg, target *prog.Target) map[uint64]bool {
 				local[call.Index] = true
 			}
 		case "fcntl":
-			duplicate := fcntlCommand(call, target.ConstMap["F_DUPFD"]) ||
-				fcntlCommand(call, target.ConstMap["F_DUPFD_CLOEXEC"])
+			duplicate := ctx.fcntlCommand(call, "F_DUPFD") ||
+				ctx.fcntlCommand(call, "F_DUPFD_CLOEXEC")
 			if _, dynamic := call.Args[1].(prog.ExecArgResult); dynamic {
 				// A dynamic command may duplicate a local descriptor at runtime.
 				duplicate = true
@@ -244,12 +257,16 @@ func localIOResources(p prog.ExecProg, target *prog.Target) map[uint64]bool {
 	return local
 }
 
-func fcntlCommand(call prog.ExecCall, command uint64) bool {
+func (ctx *context) fcntlCommand(call prog.ExecCall, commandName string) bool {
 	if call.Meta.CallName != "fcntl" || len(call.Args) < 2 {
 		return false
 	}
+	commandValue, ok := ctx.target.ConstMap[commandName]
+	if !ok {
+		return false
+	}
 	arg, ok := call.Args[1].(prog.ExecArgConst)
-	return ok && arg.Value == command
+	return ok && arg.Value == commandValue
 }
 
 func localIOArg(call prog.ExecCall, local map[uint64]bool) bool {

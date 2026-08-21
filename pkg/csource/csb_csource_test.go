@@ -494,12 +494,12 @@ func TestCSBDynamicOpenFlagsAndFcntlCommand(t *testing.T) {
 	decoded.Calls[1].Args[2] = dynamic
 	decoded.Calls[2].Args[1] = dynamic
 	decoded.Calls[3].Args[1] = dynamic
-	local := localIOResources(decoded, target)
-	assert.True(t, local[decoded.Calls[3].Index])
 	ctx := &context{
 		p: p, opts: Options{CSB: true, Slowdown: 1}, target: target,
 		sysTarget: targets.Get(target.OS, target.Arch), calls: make(map[string]uint64),
 	}
+	local := ctx.localIOResources(decoded)
+	assert.True(t, local[decoded.Calls[3].Index])
 	calls, _ := ctx.generateCalls(decoded, false, false, nil, nil, nil, false)
 	assert.Contains(t, calls[1], "(ctx->r[0] | O_NONBLOCK)")
 	assert.Contains(t, calls[2], "syscall(__NR_open")

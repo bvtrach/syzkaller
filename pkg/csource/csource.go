@@ -431,7 +431,7 @@ func (ctx *context) generateCalls(p prog.ExecProg, trace, addComments bool,
 	callComments []string, msgSizes []uint64, initIndices []int, dataMmap bool) ([]string, []uint64) {
 	var calls []string
 	csumSeq := 0
-	baseEmitOpts := emitCallOpts{localIO: localIOResources(p, ctx.target)}
+	baseEmitOpts := emitCallOpts{localIO: ctx.localIOResources(p)}
 	for ci, call := range p.Calls {
 		w := new(bytes.Buffer)
 		if addComments {
@@ -447,7 +447,7 @@ func (ctx *context) generateCalls(p prog.ExecProg, trace, addComments bool,
 		// Call itself.
 		resCopyout := call.Index != prog.ExecNoCopyout
 		argCopyout := len(call.Copyout) != 0
-		emitOpts := ctx.prepareEmitCall(w, &call, ci, baseEmitOpts, slices.Contains(initIndices, ci),
+		emitOpts := ctx.prepareEmitCall(&call, baseEmitOpts, slices.Contains(initIndices, ci),
 			dataMmap, resCopyout)
 		ctx.emitPreparedCall(w, call, ci, resCopyout || argCopyout, trace, emitOpts)
 		if call.Props.Rerun > 0 {
