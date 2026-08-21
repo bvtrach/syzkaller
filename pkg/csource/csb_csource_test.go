@@ -123,6 +123,52 @@ func TestCSBEmptyNetworkMetadata(t *testing.T) {
 	}
 }
 
+func TestCSBRestartsSetupOnlyServer(t *testing.T) {
+	target, err := prog.GetTarget(targets.Linux, targets.AMD64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name    string
+		prog    string
+		restart bool
+	}{
+		{
+			name: "setup_only",
+			prog: "r0 = socket$inet(0x2, 0x1, 0x0)\n" +
+				"listen(r0, 0x1)\n",
+			restart: true,
+		},
+		{
+			name: "server_with_dispatch_work",
+			prog: "r0 = socket$inet(0x2, 0x1, 0x0)\n" +
+				"listen(r0, 0x1)\n" +
+				"accept$inet(r0, 0x0, 0x0)\n",
+		},
+	}
+	const restart = "(void)bm_target_dereg(ctx);\n\t(void)bm_target_reg(ctx);"
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			p, err := target.Deserialize([]byte(test.prog), prog.NonStrict)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for idx := range p.Calls {
+				p.AnnotateResources(idx)
+			}
+			src, _, err := Write(p, Options{CSB: true, Slowdown: 1})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if test.restart {
+				assert.Contains(t, string(src), restart)
+			} else {
+				assert.NotContains(t, string(src), restart)
+			}
+		})
+	}
+}
+
 func TestCSBRejectsUnsupportedNetworkTopology(t *testing.T) {
 	target, err := prog.GetTarget(targets.Linux, targets.AMD64)
 	if err != nil {

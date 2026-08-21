@@ -202,6 +202,12 @@ func (ctx *context) generateSource() ([]byte, string, error) {
 		callsNetSrvBody = append(callsNetSrvBody, call)
 	}
 	syscallsBody := ctx.generateSyscalls(callsNetSrvBody, len(vars) != 0)
+	if ctx.opts.CSB && len(callsNetSrvBody) == 0 && len(netSrvListenIdxs) != 0 {
+		// Server setup normally stays live across dispatches. If setup is the
+		// whole program, recycle it so each dispatch still performs work while
+		// keeping the create/destroy lifecycle balanced.
+		syscallsBody = "\t(void)bm_target_dereg(ctx);\n\t(void)bm_target_reg(ctx);"
+	}
 
 	// Get number of listen annotations
 	var callsNetSrvDereg []string
