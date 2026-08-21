@@ -628,6 +628,22 @@ func TestCSBClosesUnusedFDResults(t *testing.T) {
 	}
 }
 
+func TestCSBPrepareRejectsHookOverwrite(t *testing.T) {
+	target, err := prog.GetTarget(targets.Linux, targets.AMD64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := emitCallOpts{hooks: emitCallHooks{
+		formatCallBody: func(string, string, []string, bool) (string, bool) {
+			return "", false
+		},
+	}}
+	call := prog.ExecCall{Meta: target.SyscallMap["dup2"]}
+	assert.PanicsWithValue(t, "prepareDup: formatCallBody hook is already installed", func() {
+		new(context).prepareDup(call, &opts)
+	})
+}
+
 func TestCSBDoesNotCloseUsedFDResultImmediately(t *testing.T) {
 	target, err := prog.GetTarget(targets.Linux, targets.AMD64)
 	if err != nil {
